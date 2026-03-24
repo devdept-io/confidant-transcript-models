@@ -52,8 +52,17 @@ def main():
     MODELS_DIR.mkdir(parents=True)
 
     # ── Now import ML libraries (after env vars are set) ──
+    # Force huggingface_hub to use our cache dir, even if it was already resolved
+    import huggingface_hub.constants
+    huggingface_hub.constants.HF_HOME = str(hf_home)
+    huggingface_hub.constants.HF_HUB_CACHE = str(hf_home / "hub")
+    huggingface_hub.constants.HUGGINGFACE_HUB_CACHE = str(hf_home / "hub")
+
     from huggingface_hub import login
     login(token=token)
+
+    print(f"  HF cache dir: {huggingface_hub.constants.HF_HUB_CACHE}")
+    print(f"  TORCH_HOME: {os.environ.get('TORCH_HOME')}")
 
     # Download Whisper model
     print("Downloading Whisper large-v3-turbo...")
