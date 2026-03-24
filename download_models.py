@@ -10,6 +10,9 @@ Usage:
     export HF_TOKEN=hf_...
     python download_models.py          # downloads + creates archive
     python download_models.py --no-archive  # download only
+
+IMPORTANT: HF_HOME and TORCH_HOME must be set BEFORE importing any ML library,
+because huggingface_hub caches the directory at import time.
 """
 
 import argparse
@@ -19,17 +22,22 @@ import subprocess
 import sys
 from pathlib import Path
 
-MODELS_DIR = Path("models")
+MODELS_DIR = Path("models").resolve()
 
 
-def download_models():
-    """Download Whisper and pyannote models into a local cache structure."""
+def main():
+    parser = argparse.ArgumentParser(description="Download ML models for transcribe CLI")
+    parser.add_argument("--no-archive", action="store_true", help="Skip archive creation")
+    args = parser.parse_args()
+
     hf_home = MODELS_DIR / "huggingface"
     torch_home = MODELS_DIR / "torch"
 
-    # Point caches to our local directory
+    # ── CRITICAL: set env vars BEFORE any ML library is imported ──
     os.environ["HF_HOME"] = str(hf_home)
     os.environ["TORCH_HOME"] = str(torch_home)
+    os.environ["HF_HUB_CACHE"] = str(hf_home / "hub")  # explicit hub cache
+    os.environ["HUGGINGFACE_HUB_CACHE"] = str(hf_home / "hub")  # legacy alias
 
     token = os.environ.get("HF_TOKEN", "")
     if not token:
@@ -37,7 +45,13 @@ def download_models():
         print("Get a token at: https://huggingface.co/settings/tokens", file=sys.stderr)
         sys.exit(1)
 
-    # Login to HuggingFace
+    # Clean previous downloads
+    if MODELS_DIR.exists():
+        print(f"Removing existing {MODELS_DIR}/...")
+        shutil.rmtree(MODELS_DIR)
+    MODELS_DIR.mkdir(parents=True)
+
+    # ── Now import ML libraries (after env vars are set) ──
     from huggingface_hub import login
     login(token=token)
 
@@ -53,71 +67,58 @@ def download_models():
     Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
     print("  ✓ Pyannote models downloaded")
 
-    # Verify that pyannote models ended up in our local cache.
-    # Some pyannote/speechbrain versions write to the default ~/.cache/torch/
-    # instead of respecting TORCH_HOME. Copy them if needed.
+    # ── Verify everything ended up in our local cache ──
+    # Some pyannote/speechbrain versions ignore TORCH_HOME and write to ~/.cache/torch/
     default_torch_cache = Path.home() / ".cache" / "torch" / "pyannote"
     local_torch_pyannote = torch_home / "pyannote"
     if default_torch_cache.exists() and not local_torch_pyannote.exists():
         print(f"  Copying pyannote torch cache from {default_torch_cache} → {local_torch_pyannote}")
         shutil.copytree(default_torch_cache, local_torch_pyannote)
 
-    # Also check for pyannote models in HF cache
+    # Check HF cache for pyannote models — copy from default cache if needed
     hf_hub = hf_home / "hub"
     pyannote_models = [
         "models--pyannote--speaker-diarization-3.1",
         "models--pyannote--segmentation-3.0",
         "models--pyannote--wespeaker-voxceleb-resnet34-LM",
     ]
+    all_found = True
     for model_name in pyannote_models:
         model_path = hf_hub / model_name
         if model_path.exists():
             print(f"  ✓ Found {model_name}")
         else:
-            # Check default HF cache and copy
+            # Copy from default HF cache
             default_hf = Path.home() / ".cache" / "huggingface" / "hub" / model_name
             if default_hf.exists():
                 print(f"  Copying {model_name} from default HF cache")
                 shutil.copytree(default_hf, model_path)
             else:
-                print(f"  ⚠ Missing {model_name}")
+                print(f"  ✗ Missing {model_name}")
+                all_found = False
 
-    # Show what we got
+    if not all_found:
+        print("\nERROR: Some pyannote models are missing. Check HF_TOKEN permissions.", file=sys.stderr)
+        sys.exit(1)
+
+    # Show size breakdown
     total = sum(f.stat().st_size for f in MODELS_DIR.rglob("*") if f.is_file())
+    hf_size = sum(f.stat().st_size for f in hf_home.rglob("*") if f.is_file()) if hf_home.exists() else 0
+    torch_size = sum(f.stat().st_size for f in torch_home.rglob("*") if f.is_file()) if torch_home.exists() else 0
     print(f"\nTotal models size: {total / 1024 / 1024:.0f} MB")
-    print(f"  huggingface/: {sum(f.stat().st_size for f in hf_home.rglob('*') if f.is_file()) / 1024 / 1024:.0f} MB")
-    print(f"  torch/: {sum(f.stat().st_size for f in torch_home.rglob('*') if f.is_file()) / 1024 / 1024:.0f} MB" if torch_home.exists() else "  torch/: 0 MB")
+    print(f"  huggingface/: {hf_size / 1024 / 1024:.0f} MB")
+    print(f"  torch/: {torch_size / 1024 / 1024:.0f} MB")
 
-
-def create_archive():
-    """Create transcribe-models.tar.gz from the models directory."""
-    archive = Path("transcribe-models.tar.gz")
-    print(f"\nCreating {archive}...")
-    subprocess.run(
-        ["tar", "czf", str(archive), "-C", str(MODELS_DIR.parent), MODELS_DIR.name],
-        check=True,
-    )
-    size = archive.stat().st_size / 1024 / 1024
-    print(f"  ✓ Archive created: {archive} ({size:.0f} MB)")
-    return archive
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Download ML models for transcribe CLI")
-    parser.add_argument("--no-archive", action="store_true", help="Skip archive creation")
-    args = parser.parse_args()
-
-    # Clean previous downloads
-    if MODELS_DIR.exists():
-        print(f"Removing existing {MODELS_DIR}/...")
-        shutil.rmtree(MODELS_DIR)
-
-    MODELS_DIR.mkdir(parents=True)
-
-    download_models()
-
+    # Create archive
     if not args.no_archive:
-        create_archive()
+        archive = Path("transcribe-models.tar.gz")
+        print(f"\nCreating {archive}...")
+        subprocess.run(
+            ["tar", "czf", str(archive), "-C", str(MODELS_DIR.parent), MODELS_DIR.name],
+            check=True,
+        )
+        size = archive.stat().st_size / 1024 / 1024
+        print(f"  ✓ Archive created: {archive} ({size:.0f} MB)")
 
     print("\nDone!")
 
