@@ -53,9 +53,40 @@ def download_models():
     Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
     print("  ✓ Pyannote models downloaded")
 
+    # Verify that pyannote models ended up in our local cache.
+    # Some pyannote/speechbrain versions write to the default ~/.cache/torch/
+    # instead of respecting TORCH_HOME. Copy them if needed.
+    default_torch_cache = Path.home() / ".cache" / "torch" / "pyannote"
+    local_torch_pyannote = torch_home / "pyannote"
+    if default_torch_cache.exists() and not local_torch_pyannote.exists():
+        print(f"  Copying pyannote torch cache from {default_torch_cache} → {local_torch_pyannote}")
+        shutil.copytree(default_torch_cache, local_torch_pyannote)
+
+    # Also check for pyannote models in HF cache
+    hf_hub = hf_home / "hub"
+    pyannote_models = [
+        "models--pyannote--speaker-diarization-3.1",
+        "models--pyannote--segmentation-3.0",
+        "models--pyannote--wespeaker-voxceleb-resnet34-LM",
+    ]
+    for model_name in pyannote_models:
+        model_path = hf_hub / model_name
+        if model_path.exists():
+            print(f"  ✓ Found {model_name}")
+        else:
+            # Check default HF cache and copy
+            default_hf = Path.home() / ".cache" / "huggingface" / "hub" / model_name
+            if default_hf.exists():
+                print(f"  Copying {model_name} from default HF cache")
+                shutil.copytree(default_hf, model_path)
+            else:
+                print(f"  ⚠ Missing {model_name}")
+
     # Show what we got
     total = sum(f.stat().st_size for f in MODELS_DIR.rglob("*") if f.is_file())
     print(f"\nTotal models size: {total / 1024 / 1024:.0f} MB")
+    print(f"  huggingface/: {sum(f.stat().st_size for f in hf_home.rglob('*') if f.is_file()) / 1024 / 1024:.0f} MB")
+    print(f"  torch/: {sum(f.stat().st_size for f in torch_home.rglob('*') if f.is_file()) / 1024 / 1024:.0f} MB" if torch_home.exists() else "  torch/: 0 MB")
 
 
 def create_archive():
