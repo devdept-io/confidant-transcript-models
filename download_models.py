@@ -84,8 +84,7 @@ def main():
         print(f"  Copying pyannote torch cache from {default_torch_cache} → {local_torch_pyannote}")
         shutil.copytree(default_torch_cache, local_torch_pyannote)
 
-    # Check HF cache for pyannote models — copy from default cache if needed
-    hf_hub = hf_home / "hub"
+    # Verify pyannote models are in torch cache (pyannote stores them there, not in HF hub)
     pyannote_models = [
         "models--pyannote--speaker-diarization-3.1",
         "models--pyannote--segmentation-3.0",
@@ -93,21 +92,18 @@ def main():
     ]
     all_found = True
     for model_name in pyannote_models:
-        model_path = hf_hub / model_name
-        if model_path.exists():
-            print(f"  ✓ Found {model_name}")
+        torch_path = torch_home / "pyannote" / model_name
+        if torch_path.exists():
+            print(f"  ✓ Found {model_name} (torch)")
         else:
-            # Copy from default HF cache
-            default_hf = Path.home() / ".cache" / "huggingface" / "hub" / model_name
-            if default_hf.exists():
-                print(f"  Copying {model_name} from default HF cache")
-                shutil.copytree(default_hf, model_path)
-            else:
-                print(f"  ✗ Missing {model_name}")
-                all_found = False
+            print(f"  ✗ Missing {model_name} in torch cache")
+            all_found = False
 
     if not all_found:
-        print("\nERROR: Some pyannote models are missing. Check HF_TOKEN permissions.", file=sys.stderr)
+        print("\nERROR: Some pyannote models are missing from torch cache.", file=sys.stderr)
+        print("Contents of torch_home:", file=sys.stderr)
+        for p in sorted(torch_home.rglob("*"))[:30]:
+            print(f"  {p.relative_to(torch_home)}", file=sys.stderr)
         sys.exit(1)
 
     # Show size breakdown
