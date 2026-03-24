@@ -15,9 +15,8 @@ This is a public repository so the transcribe executable can download models wit
 
 ## Releasing a new version
 
-1. Go to **Actions** → **Release Models**
-2. Click **Run workflow**
-3. Enter a version tag (e.g. `v1.0.0`)
-4. The workflow downloads all models and creates a GitHub Release with `transcribe-models.tar.gz`
+Every push to `main` runs **Release Models** and publishes a GitHub Release with a **semver tag** (`v1.0.0`, `v1.0.1`, …): the workflow looks at existing `v*.*.*` tags, takes the highest, and bumps the patch. If no such tags exist yet, it starts at `v1.0.0`.
+
+You can also trigger the workflow manually under **Actions** → **Release Models** → **Run workflow**. Leave the version field empty for the same automatic semver, or set a tag explicitly (e.g. `v2.0.0` for a major/minor bump).
 
 Then update `REQUIRED_MODEL_VERSION` in the main repo's `src/config.py` to match.
