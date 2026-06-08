@@ -67,8 +67,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install torch==2.3.1+cpu torchaudio==2.3.1+cpu --index-url https://download.pytorch.org/whl/cpu
-          pip install faster-whisper==1.1.1 "pyannote.audio>=3.3.1" "huggingface-hub==0.25.2"
+          pip install "torch>=2.8.0" "torchaudio>=2.8.0" --index-url https://download.pytorch.org/whl/cpu
+          pip install "faster-whisper>=1.1.1" "pyannote.audio>=4.0.0" "huggingface-hub>=0.25.2"
 
       - name: Download models
         env:
@@ -88,9 +88,7 @@ jobs:
 
           **Contents:**
           - Whisper large-v3-turbo (faster-whisper)
-          - pyannote speaker-diarization-3.1
-          - pyannote segmentation-3.0
-          - wespeaker-voxceleb-resnet34-LM
+          - pyannote speaker-diarization-community-1 (includes segmentation + embedding)
 
           **Size:** $SIZE compressed
 

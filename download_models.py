@@ -70,40 +70,18 @@ def main():
     WhisperModel("large-v3-turbo", device="cpu", compute_type="int8")
     print("  ✓ Whisper model downloaded")
 
-    # Download pyannote diarization model (pulls segmentation + speaker embedding too)
-    print("Downloading pyannote speaker-diarization-3.1...")
+    # Download pyannote community model (bundles segmentation + embedding internally)
+    print("Downloading pyannote speaker-diarization-community-1...")
     from pyannote.audio import Pipeline
-    Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
-    print("  ✓ Pyannote models downloaded")
+    Pipeline.from_pretrained("pyannote/speaker-diarization-community-1", token=token)
+    print("  ✓ Pyannote community model downloaded")
 
-    # ── Verify everything ended up in our local cache ──
-    # Some pyannote/speechbrain versions ignore TORCH_HOME and write to ~/.cache/torch/
-    default_torch_cache = Path.home() / ".cache" / "torch" / "pyannote"
-    local_torch_pyannote = torch_home / "pyannote"
-    if default_torch_cache.exists() and not local_torch_pyannote.exists():
-        print(f"  Copying pyannote torch cache from {default_torch_cache} → {local_torch_pyannote}")
-        shutil.copytree(default_torch_cache, local_torch_pyannote)
-
-    # Verify pyannote models are in torch cache (pyannote stores them there, not in HF hub)
-    pyannote_models = [
-        "models--pyannote--speaker-diarization-3.1",
-        "models--pyannote--segmentation-3.0",
-        "models--pyannote--wespeaker-voxceleb-resnet34-LM",
-    ]
-    all_found = True
-    for model_name in pyannote_models:
-        torch_path = torch_home / "pyannote" / model_name
-        if torch_path.exists():
-            print(f"  ✓ Found {model_name} (torch)")
-        else:
-            print(f"  ✗ Missing {model_name} in torch cache")
-            all_found = False
-
-    if not all_found:
-        print("\nERROR: Some pyannote models are missing from torch cache.", file=sys.stderr)
-        print("Contents of torch_home:", file=sys.stderr)
-        for p in sorted(torch_home.rglob("*"))[:30]:
-            print(f"  {p.relative_to(torch_home)}", file=sys.stderr)
+    # Verify community model is in HF hub cache
+    community_path = hf_home / "hub" / "models--pyannote--speaker-diarization-community-1"
+    if community_path.exists():
+        print(f"  ✓ Found speaker-diarization-community-1 (huggingface)")
+    else:
+        print(f"  ✗ Missing speaker-diarization-community-1 in HF cache", file=sys.stderr)
         sys.exit(1)
 
     # Show size breakdown
